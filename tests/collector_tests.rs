@@ -110,3 +110,34 @@ fn disk_list_does_not_panic_when_empty_or_populated() {
     // and iteration complete without panicking either way.
     let _ = snapshot.disks().len();
 }
+
+#[test]
+fn first_network_sample_reports_no_rates() {
+    let mut collector = Collector::new();
+    let snapshot = collector.refresh();
+
+    for network in snapshot.networks() {
+        assert_eq!(
+            network.received_bytes_per_sec(),
+            None,
+            "interface {:?} should have no rate on the very first sample",
+            network.name()
+        );
+        assert_eq!(network.transmitted_bytes_per_sec(), None);
+    }
+}
+
+#[test]
+fn second_network_sample_can_report_real_rates_without_panicking() {
+    let mut collector = Collector::new();
+    collector.refresh();
+    sleep(Duration::from_millis(50));
+    let snapshot = collector.refresh();
+
+    // Rates are host-dependent, so we only assert that reading them (an
+    // `Option<u64>`, never negative by construction) does not panic.
+    for network in snapshot.networks() {
+        let _ = network.received_bytes_per_sec();
+        let _ = network.transmitted_bytes_per_sec();
+    }
+}

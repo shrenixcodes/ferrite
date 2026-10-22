@@ -188,6 +188,7 @@ mod tests {
             CpuStats::new(10.0, 4),
             MemoryStats::new(1_000, 400),
             Vec::new(),
+            Vec::new(),
             vec![
                 ProcessInfo::new(1, "a", 50.0, 10),
                 ProcessInfo::new(2, "b", 10.0, 90),

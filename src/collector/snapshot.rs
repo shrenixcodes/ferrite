@@ -3,6 +3,7 @@
 use super::cpu::CpuStats;
 use super::disk::DiskInfo;
 use super::memory::MemoryStats;
+use super::network::NetworkInterfaceStats;
 use super::process::ProcessInfo;
 
 /// A single point-in-time snapshot of system metrics.
@@ -15,6 +16,7 @@ pub struct MetricsSnapshot {
     cpu: CpuStats,
     memory: MemoryStats,
     disks: Vec<DiskInfo>,
+    networks: Vec<NetworkInterfaceStats>,
     processes: Vec<ProcessInfo>,
     cpu_metrics_initialized: bool,
 }
@@ -29,6 +31,7 @@ impl MetricsSnapshot {
         cpu: CpuStats,
         memory: MemoryStats,
         disks: Vec<DiskInfo>,
+        networks: Vec<NetworkInterfaceStats>,
         processes: Vec<ProcessInfo>,
         cpu_metrics_initialized: bool,
     ) -> Self {
@@ -36,6 +39,7 @@ impl MetricsSnapshot {
             cpu,
             memory,
             disks,
+            networks,
             processes,
             cpu_metrics_initialized,
         }
@@ -55,6 +59,14 @@ impl MetricsSnapshot {
     /// platform reports none.
     pub fn disks(&self) -> &[DiskInfo] {
         &self.disks
+    }
+
+    /// Traffic statistics for every detected network interface. May be
+    /// empty if the platform reports none. Rates are `None` for any
+    /// interface seen for the first time this run; see
+    /// [`NetworkInterfaceStats`].
+    pub fn networks(&self) -> &[NetworkInterfaceStats] {
+        &self.networks
     }
 
     /// The process list, sorted by CPU usage (highest first).
@@ -87,13 +99,28 @@ mod tests {
         let cpu = CpuStats::new(12.5, 4);
         let memory = MemoryStats::new(1_000, 500);
         let disks = vec![DiskInfo::new("disk0", "/", 1_000, 500)];
+        let networks = vec![NetworkInterfaceStats::new(
+            "eth0",
+            100,
+            200,
+            Some(10),
+            Some(20),
+        )];
         let processes = vec![ProcessInfo::new(1, "init", 0.0, 100)];
 
-        let snapshot = MetricsSnapshot::new(cpu, memory, disks.clone(), processes.clone(), true);
+        let snapshot = MetricsSnapshot::new(
+            cpu,
+            memory,
+            disks.clone(),
+            networks.clone(),
+            processes.clone(),
+            true,
+        );
 
         assert_eq!(snapshot.cpu(), &cpu);
         assert_eq!(snapshot.memory(), &memory);
         assert_eq!(snapshot.disks(), disks.as_slice());
+        assert_eq!(snapshot.networks(), networks.as_slice());
         assert_eq!(snapshot.processes(), processes.as_slice());
         assert!(snapshot.cpu_metrics_initialized());
     }
@@ -105,10 +132,12 @@ mod tests {
             MemoryStats::new(0, 0),
             Vec::new(),
             Vec::new(),
+            Vec::new(),
             false,
         );
 
         assert!(snapshot.disks().is_empty());
+        assert!(snapshot.networks().is_empty());
         assert!(snapshot.processes().is_empty());
         assert!(!snapshot.cpu_metrics_initialized());
     }

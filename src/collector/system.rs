@@ -2,11 +2,12 @@
 
 use std::time::Instant;
 
-use sysinfo::{Disks, ProcessesToUpdate, System};
+use sysinfo::{Disks, Networks, ProcessesToUpdate, System};
 
 use super::cpu::CpuStats;
 use super::disk::DiskInfo;
 use super::memory::MemoryStats;
+use super::network::{NetworkInterfaceStats, NetworkRateTracker};
 use super::process::{ProcessInfo, sort_processes_by_cpu_desc};
 use super::snapshot::MetricsSnapshot;
 
@@ -23,12 +24,18 @@ use super::snapshot::MetricsSnapshot;
 /// immediately, from the first snapshot.
 ///
 /// Platform note: available metrics depend on `sysinfo`'s platform
-/// backend. This milestone only reads CPU usage, memory totals, and the
-/// (PID, name, CPU, memory) tuple for each process, all of which `sysinfo`
-/// provides on every platform it supports.
+/// backend. CPU usage, memory totals, per-process (PID, name, CPU,
+/// memory), disk capacity, and network interface counters are all read
+/// through `sysinfo`'s cross-platform APIs, which it supports on every
+/// platform it builds for (Linux, macOS, Windows). Which specific disks
+/// or network interfaces are visible — and how fine-grained their
+/// reported counters are — is still ultimately up to the OS and `sysinfo`'s
+/// platform backend, not something this crate controls.
 pub struct Collector {
     system: System,
     disks: Disks,
+    networks: Networks,
+    network_rates: NetworkRateTracker,
     last_refresh: Option<Instant>,
 }
 
@@ -39,7 +46,10 @@ impl Collector {
     /// The snapshot returned by the first call to [`Self::refresh`] can
     /// report reliable CPU usage, provided enough time
     /// ([`sysinfo::MINIMUM_CPU_UPDATE_INTERVAL`]) has elapsed since this
-    /// call returned.
+    /// call returned. Network rates follow the same rule, independently:
+    /// the first call to [`Self::refresh`] has no prior counter sample for
+    /// any interface, so its network rates are `None` (see
+    /// [`NetworkInterfaceStats`]).
     pub fn new() -> Self {
         let mut system = System::new_all();
         system.refresh_cpu_usage();
@@ -49,6 +59,8 @@ impl Collector {
         Self {
             system,
             disks: Disks::new_with_refreshed_list(),
+            networks: Networks::new_with_refreshed_list(),
+            network_rates: NetworkRateTracker::new(),
             last_refresh: Some(Instant::now()),
         }
     }
@@ -74,7 +86,9 @@ impl Collector {
         self.system.refresh_memory();
         self.system.refresh_processes(ProcessesToUpdate::All, true);
         self.disks.refresh(true);
-        self.last_refresh = Some(Instant::now());
+        self.networks.refresh(true);
+        let now = Instant::now();
+        self.last_refresh = Some(now);
 
         let cpu = CpuStats::new(self.system.global_cpu_usage(), self.system.cpus().len());
         let memory = MemoryStats::new(self.system.total_memory(), self.system.used_memory());
@@ -93,6 +107,20 @@ impl Collector {
             })
             .collect();
 
+        let current_network_totals: Vec<(String, u64, u64)> = self
+            .networks
+            .iter()
+            .map(|(name, data)| {
+                (
+                    name.clone(),
+                    data.total_received(),
+                    data.total_transmitted(),
+                )
+            })
+            .collect();
+        let networks: Vec<NetworkInterfaceStats> =
+            self.network_rates.update(&current_network_totals, now);
+
         let mut processes: Vec<ProcessInfo> = self
             .system
             .processes()
@@ -108,7 +136,14 @@ impl Collector {
             .collect();
         sort_processes_by_cpu_desc(&mut processes);
 
-        MetricsSnapshot::new(cpu, memory, disks, processes, cpu_metrics_initialized)
+        MetricsSnapshot::new(
+            cpu,
+            memory,
+            disks,
+            networks,
+            processes,
+            cpu_metrics_initialized,
+        )
     }
 }
 
