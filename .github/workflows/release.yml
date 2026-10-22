@@ -1,0 +1,116 @@
+# Builds and publishes a GitHub release when a `v*.*.*` tag is pushed.
+#
+# Every target re-runs the full verification suite (fmt, clippy, tests)
+# before building its release binary, and the publish step only runs if
+# every build succeeds — so a release is never cut from unverified code.
+#
+# This workflow only triggers on tag pushes, never on pull requests or
+# ordinary pushes to main, so it never runs against unreviewed code and
+# never requires secrets for routine CI. Publishing uses the GitHub CLI
+# (`gh`, preinstalled on all runners) authenticated with the automatically
+# provided `GITHUB_TOKEN` — no manually configured secret is needed, but
+# the repository's Settings -> Actions -> General -> Workflow permissions
+# must allow "Read and write permissions" (or this workflow's own
+# `permissions: contents: write` must be honored, which requires that
+# setting not be locked to read-only at the organization level).
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary_name: ferrite
+            asset_name: ferrite-x86_64-unknown-linux-gnu
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            binary_name: ferrite.exe
+            asset_name: ferrite-x86_64-pc-windows-msvc.exe
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            binary_name: ferrite
+            asset_name: ferrite-x86_64-apple-darwin
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            binary_name: ferrite
+            asset_name: ferrite-aarch64-apple-darwin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-targets
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Stage release artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "dist/${{ matrix.asset_name }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten artifacts into one directory
+        run: |
+          mkdir -p release-assets
+          find dist -type f -exec cp {} release-assets/ \;
+          ls -la release-assets
+
+      - name: Create GitHub release and upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" release-assets/* \
+            --title "Ferrite ${{ github.ref_name }}" \
+            --generate-notes
