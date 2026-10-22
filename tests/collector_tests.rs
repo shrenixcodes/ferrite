@@ -86,3 +86,27 @@ fn cpu_metrics_become_reliable_after_waiting_the_minimum_interval() {
     let snapshot = collector.refresh();
     assert!(snapshot.cpu_metrics_initialized());
 }
+
+#[test]
+fn every_disk_reports_used_bytes_within_its_total() {
+    let mut collector = Collector::new();
+    let snapshot = collector.refresh();
+
+    for disk in snapshot.disks() {
+        assert!(
+            disk.used_bytes() <= disk.total_bytes(),
+            "disk {:?} at {:?} reported used_bytes > total_bytes",
+            disk.name(),
+            disk.mount_point()
+        );
+    }
+}
+
+#[test]
+fn disk_list_does_not_panic_when_empty_or_populated() {
+    let mut collector = Collector::new();
+    let snapshot = collector.refresh();
+    // No assertion on the count (host-dependent); just confirms collection
+    // and iteration complete without panicking either way.
+    let _ = snapshot.disks().len();
+}

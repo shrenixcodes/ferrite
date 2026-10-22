@@ -7,7 +7,7 @@
 //! without a real [`crate::collector::Collector`] or terminal.
 
 use crate::collector::{
-    CpuStats, MemoryStats, MetricsSnapshot, ProcessInfo, sort_processes_by_cpu_desc,
+    CpuStats, DiskInfo, MemoryStats, MetricsSnapshot, ProcessInfo, sort_processes_by_cpu_desc,
     sort_processes_by_memory_desc,
 };
 
@@ -29,6 +29,7 @@ pub enum SortMode {
 pub struct App {
     cpu: CpuStats,
     memory: MemoryStats,
+    disks: Vec<DiskInfo>,
     cpu_metrics_initialized: bool,
     processes: Vec<ProcessInfo>,
     selected_pid: Option<u32>,
@@ -45,6 +46,7 @@ impl App {
         Self {
             cpu: CpuStats::new(0.0, 0),
             memory: MemoryStats::new(0, 0),
+            disks: Vec::new(),
             cpu_metrics_initialized: false,
             processes: Vec::new(),
             selected_pid: None,
@@ -69,6 +71,7 @@ impl App {
 
         self.cpu = *snapshot.cpu();
         self.memory = *snapshot.memory();
+        self.disks = snapshot.disks().to_vec();
         self.cpu_metrics_initialized = snapshot.cpu_metrics_initialized();
         self.processes = snapshot.processes().to_vec();
         self.sort_processes();
@@ -107,6 +110,12 @@ impl App {
     /// The most recent memory usage.
     pub fn memory(&self) -> &MemoryStats {
         &self.memory
+    }
+
+    /// Storage usage for every detected disk/mount. May be empty if the
+    /// platform reports none.
+    pub fn disks(&self) -> &[DiskInfo] {
+        &self.disks
     }
 
     /// Whether [`Self::cpu`] (and each process's CPU usage) reflects a real
@@ -216,6 +225,7 @@ mod tests {
         MetricsSnapshot::new(
             CpuStats::new(10.0, 4),
             MemoryStats::new(1_000, 400),
+            Vec::new(),
             processes,
             true,
         )
@@ -225,12 +235,30 @@ mod tests {
     fn new_app_has_no_metrics_or_selection() {
         let app = App::new(1_000);
         assert!(app.processes().is_empty());
+        assert!(app.disks().is_empty());
         assert_eq!(app.selected_index(), None);
         assert!(!app.cpu_metrics_initialized());
         assert_eq!(app.sort_mode(), SortMode::Cpu);
         assert!(!app.is_paused());
         assert!(!app.show_help());
         assert_eq!(app.refresh_interval_ms(), 1_000);
+    }
+
+    #[test]
+    fn applying_a_snapshot_stores_its_disks() {
+        let mut app = App::new(1_000);
+        let disks = vec![DiskInfo::new("disk0", "/", 1_000, 400)];
+        let snapshot = MetricsSnapshot::new(
+            CpuStats::new(10.0, 4),
+            MemoryStats::new(1_000, 400),
+            disks.clone(),
+            Vec::new(),
+            true,
+        );
+
+        app.apply_snapshot(snapshot);
+
+        assert_eq!(app.disks(), disks.as_slice());
     }
 
     #[test]

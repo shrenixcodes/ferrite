@@ -1,6 +1,7 @@
 //! The combined metrics snapshot returned by the collector.
 
 use super::cpu::CpuStats;
+use super::disk::DiskInfo;
 use super::memory::MemoryStats;
 use super::process::ProcessInfo;
 
@@ -13,6 +14,7 @@ use super::process::ProcessInfo;
 pub struct MetricsSnapshot {
     cpu: CpuStats,
     memory: MemoryStats,
+    disks: Vec<DiskInfo>,
     processes: Vec<ProcessInfo>,
     cpu_metrics_initialized: bool,
 }
@@ -26,12 +28,14 @@ impl MetricsSnapshot {
     pub fn new(
         cpu: CpuStats,
         memory: MemoryStats,
+        disks: Vec<DiskInfo>,
         processes: Vec<ProcessInfo>,
         cpu_metrics_initialized: bool,
     ) -> Self {
         Self {
             cpu,
             memory,
+            disks,
             processes,
             cpu_metrics_initialized,
         }
@@ -45,6 +49,12 @@ impl MetricsSnapshot {
     /// System memory usage.
     pub fn memory(&self) -> &MemoryStats {
         &self.memory
+    }
+
+    /// Storage usage for every detected disk/mount. May be empty if the
+    /// platform reports none.
+    pub fn disks(&self) -> &[DiskInfo] {
+        &self.disks
     }
 
     /// The process list, sorted by CPU usage (highest first).
@@ -76,25 +86,29 @@ mod tests {
     fn exposes_the_values_it_was_constructed_with() {
         let cpu = CpuStats::new(12.5, 4);
         let memory = MemoryStats::new(1_000, 500);
+        let disks = vec![DiskInfo::new("disk0", "/", 1_000, 500)];
         let processes = vec![ProcessInfo::new(1, "init", 0.0, 100)];
 
-        let snapshot = MetricsSnapshot::new(cpu, memory, processes.clone(), true);
+        let snapshot = MetricsSnapshot::new(cpu, memory, disks.clone(), processes.clone(), true);
 
         assert_eq!(snapshot.cpu(), &cpu);
         assert_eq!(snapshot.memory(), &memory);
+        assert_eq!(snapshot.disks(), disks.as_slice());
         assert_eq!(snapshot.processes(), processes.as_slice());
         assert!(snapshot.cpu_metrics_initialized());
     }
 
     #[test]
-    fn empty_process_list_is_a_valid_snapshot() {
+    fn empty_process_and_disk_lists_are_a_valid_snapshot() {
         let snapshot = MetricsSnapshot::new(
             CpuStats::new(0.0, 1),
             MemoryStats::new(0, 0),
             Vec::new(),
+            Vec::new(),
             false,
         );
 
+        assert!(snapshot.disks().is_empty());
         assert!(snapshot.processes().is_empty());
         assert!(!snapshot.cpu_metrics_initialized());
     }
