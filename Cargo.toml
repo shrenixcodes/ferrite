@@ -9,3 +9,4 @@ keywords = ["system-monitor", "terminal", "tui", "cli"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
