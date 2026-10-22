@@ -1,0 +1,101 @@
+//! The combined metrics snapshot returned by the collector.
+
+use super::cpu::CpuStats;
+use super::memory::MemoryStats;
+use super::process::ProcessInfo;
+
+/// A single point-in-time snapshot of system metrics.
+///
+/// Produced by [`crate::collector::Collector::refresh`]. See
+/// [`MetricsSnapshot::cpu_metrics_initialized`] before trusting any CPU
+/// usage figures, including per-process ones.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MetricsSnapshot {
+    cpu: CpuStats,
+    memory: MemoryStats,
+    processes: Vec<ProcessInfo>,
+    cpu_metrics_initialized: bool,
+}
+
+impl MetricsSnapshot {
+    /// Creates a new [`MetricsSnapshot`] from already-collected data.
+    ///
+    /// `cpu_metrics_initialized` must be `false` until the collector has
+    /// taken at least two timed samples; see
+    /// [`crate::collector::Collector`] for details.
+    pub fn new(
+        cpu: CpuStats,
+        memory: MemoryStats,
+        processes: Vec<ProcessInfo>,
+        cpu_metrics_initialized: bool,
+    ) -> Self {
+        Self {
+            cpu,
+            memory,
+            processes,
+            cpu_metrics_initialized,
+        }
+    }
+
+    /// System-wide CPU usage.
+    pub fn cpu(&self) -> &CpuStats {
+        &self.cpu
+    }
+
+    /// System memory usage.
+    pub fn memory(&self) -> &MemoryStats {
+        &self.memory
+    }
+
+    /// The process list, sorted by CPU usage (highest first).
+    pub fn processes(&self) -> &[ProcessInfo] {
+        &self.processes
+    }
+
+    /// Whether CPU usage figures in this snapshot (both [`Self::cpu`] and
+    /// each process's `cpu_usage_percent`) reflect a real timed sample.
+    ///
+    /// `sysinfo` computes CPU usage as a delta between two samples. The
+    /// first sample after construction has no prior sample to diff against,
+    /// so its CPU usage reads as `0.0` and does not reflect real load.
+    /// Callers must not treat CPU usage as a reliable measurement while
+    /// this returns `false` — refresh again (after
+    /// [`sysinfo::MINIMUM_CPU_UPDATE_INTERVAL`] has elapsed) and use the
+    /// next snapshot instead. Memory and process-list membership are not
+    /// affected and are reliable from the first snapshot.
+    pub fn cpu_metrics_initialized(&self) -> bool {
+        self.cpu_metrics_initialized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exposes_the_values_it_was_constructed_with() {
+        let cpu = CpuStats::new(12.5, 4);
+        let memory = MemoryStats::new(1_000, 500);
+        let processes = vec![ProcessInfo::new(1, "init", 0.0, 100)];
+
+        let snapshot = MetricsSnapshot::new(cpu, memory, processes.clone(), true);
+
+        assert_eq!(snapshot.cpu(), &cpu);
+        assert_eq!(snapshot.memory(), &memory);
+        assert_eq!(snapshot.processes(), processes.as_slice());
+        assert!(snapshot.cpu_metrics_initialized());
+    }
+
+    #[test]
+    fn empty_process_list_is_a_valid_snapshot() {
+        let snapshot = MetricsSnapshot::new(
+            CpuStats::new(0.0, 1),
+            MemoryStats::new(0, 0),
+            Vec::new(),
+            false,
+        );
+
+        assert!(snapshot.processes().is_empty());
+        assert!(!snapshot.cpu_metrics_initialized());
+    }
+}
