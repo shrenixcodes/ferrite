@@ -1,7 +1,9 @@
 # Contributing to Ferrite
 
-Thanks for your interest in contributing. This project is in an early,
-foundational stage, so changes should stay focused and well-tested.
+Thanks for your interest in contributing. Ferrite's core metrics engine,
+dashboard, history, and alerting are implemented and tested; contributions
+should build on that foundation rather than restructuring it without
+discussion.
 
 ## Setting up your environment
 
@@ -12,6 +14,8 @@ foundational stage, so changes should stay focused and well-tested.
    ```bash
    cargo build
    ```
+3. Run it directly from the repo with `cargo run` (needs a real terminal —
+   see the README's Troubleshooting section if it fails to start).
 
 ## Checks to run before submitting changes
 
@@ -24,8 +28,9 @@ cargo test --all-targets
 cargo build --release
 ```
 
-These are the same checks enforced by continuous integration. A pull request
-that fails any of them will not be merged.
+These are the same checks enforced by continuous integration, which runs
+on Linux, Windows, and macOS (see `.github/workflows/ci.yml`). A pull
+request that fails any of them will not be merged.
 
 ## Keeping changes focused
 
@@ -39,13 +44,28 @@ that fails any of them will not be merged.
 
 ## Writing and running tests
 
-- Add unit tests alongside the code they exercise (see `src/config.rs` for
-  an example) and integration tests under `tests/` for public API behavior.
+- Add unit tests alongside the code they exercise (see `src/config/mod.rs`
+  or `src/collector/network.rs` for examples of pure, dependency-free
+  logic with thorough unit tests) and integration tests under `tests/`
+  for public API behavior.
 - Tests should assert concrete return values and error conditions, not just
   that a function runs without panicking.
 - Prefer deterministic tests. Avoid relying on system load, timing, network
-  access, or terminal availability.
+  access, or terminal availability. Where a real clock is unavoidable
+  (e.g. history timestamps), use `Instant` arithmetic (`t0 + Duration`)
+  rather than real `sleep` calls so tests stay fast and deterministic.
 - Run `cargo test --all-targets` before submitting.
+
+## Platform-specific contributions
+
+Ferrite targets Linux, Windows, and macOS. If you're fixing or extending
+platform-specific code (currently limited to configuration file path
+resolution in `src/config/file.rs`), add a `#[cfg]`-gated unit test for
+that platform rather than only testing on your own machine — see the
+existing `windows_config_dir_uses_appdata`,
+`linux_config_dir_prefers_xdg_config_home`, and
+`macos_config_dir_uses_home_library` tests for the pattern. CI will run
+your test on the matching OS even if you can't locally.
 
 ## Preparing a pull request
 
