@@ -9,4 +9,6 @@ keywords = ["system-monitor", "terminal", "tui", "cli"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+crossterm = "0.29.0"
+ratatui = { version = "0.30.2", default-features = false, features = ["std", "crossterm"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
