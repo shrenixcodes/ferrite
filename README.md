@@ -7,13 +7,19 @@ real-time resource metrics, process inspection, and configurable alerts.
 
 ## Development status
 
-**Active development — core metrics, history, and alerting are in place;
-export and remote telemetry are not.** Running the executable opens a live
-terminal dashboard with CPU, memory, disk, and network panels, bounded
-in-memory history sparklines, a sortable/navigable process table, and
-configurable threshold alerts. Configuration can come from an optional
-TOML file. There is still no data export and no background collection
-decoupled from the render loop.
+**Pre-1.0, active development (current version: see `Cargo.toml`) — core
+metrics, history, and alerting are in place; export and remote telemetry
+are not.** Running the executable opens a live terminal dashboard with
+CPU, memory, disk, and network panels, bounded in-memory history
+sparklines, a sortable/navigable process table, and configurable
+threshold alerts. Configuration can come from an optional TOML file.
+There is still no data export, no background collection decoupled from
+the render loop, and no formal GitHub release has been published yet
+(see [CHANGELOG.md](CHANGELOG.md) and [RELEASING.md](RELEASING.md)).
+
+No screenshot or terminal recording is included yet — none has actually
+been captured for this repository, and a fabricated one would be
+misleading. Contributions adding a genuine one are welcome.
 
 ## Project goals
 
@@ -94,22 +100,76 @@ decoupled from the render loop.
   - Default features not listed above (user/component collection, the
     calendar widget, alternate terminal backends, etc.) are disabled,
     since they are out of scope for this project.
+- **Dev-only dependency:** [`criterion`](https://docs.rs/criterion) `0.8`
+  (minimal features), for the benchmark suite under `benches/`. This
+  never compiles into `cargo build --release`'s output — only into
+  `cargo bench`/`cargo test`.
+- No `cargo-audit`/`cargo-deny` style automated vulnerability scan has
+  been run against this dependency tree (the tooling wasn't available in
+  the environment this was prepared in); dependencies were reviewed
+  manually via `cargo tree` instead. See
+  [CONTRIBUTING.md](CONTRIBUTING.md) for the project's dependency policy.
 
 ## Prerequisites
 
-- A stable Rust toolchain (edition 2024 support requires Rust 1.85 or later).
+- A stable Rust toolchain, 1.85 or later (edition 2024 requires it).
   Install via [rustup](https://rustup.rs/).
+- A real terminal to run the dashboard in. Platform notes:
+  - **Windows:** Windows Terminal or the Windows 10/11 Console both
+    work. Legacy `cmd.exe` in older Windows versions may render the
+    Unicode symbols (`⚠ ↓ ↑ —`) and sparkline bars poorly — this is a
+    terminal-capability limitation, not something Ferrite detects or
+    works around.
+  - **Linux:** any modern terminal emulator (GNOME Terminal, Konsole,
+    Alacritty, etc.) over a UTF-8 locale.
+  - **macOS:** Terminal.app or iTerm2.
+  - No elevated/administrator privileges are required — Ferrite only
+    reads metrics an unprivileged process can already see via `sysinfo`.
 
-## Build and run
+## Installing
+
+**From a release binary:** once a release has been published (see
+[RELEASING.md](RELEASING.md) — none has yet), download the binary for
+your platform from the
+[Releases page](https://github.com/shrenixcodes/ferrite/releases) and
+run it directly. No installer or elevated privileges are needed.
+
+**From source with Cargo** (works today):
 
 ```bash
-cargo build
+git clone https://github.com/shrenixcodes/ferrite.git
+cd ferrite
+cargo install --path .
+```
+
+This builds a release binary and copies it to Cargo's bin directory
+(`~/.cargo/bin` by default, or `%USERPROFILE%\.cargo\bin` on Windows —
+make sure that directory is on your `PATH`, which the Rust installer
+normally arranges for you). Run it with `ferrite` from anywhere
+afterward.
+
+To uninstall a binary installed this way:
+
+```bash
+cargo uninstall ferrite
+```
+
+**Without installing**, just build and run in place from a clone:
+
+```bash
+cargo build --release
+cargo run --release
+```
+
+## Running Ferrite
+
+```bash
 cargo run
 ```
 
-`cargo run` launches the dashboard directly in your terminal (it needs a
-real terminal — it will fail with an I/O error if stdout isn't one, such as
-when piped). Controls:
+(or just `ferrite` if installed via `cargo install`). The dashboard needs
+a real terminal — it will fail with an I/O error if stdout isn't one,
+such as when piped or redirected to a file. Controls:
 
 | Key(s)                | Action                            |
 | --------------------- | ---------------------------------- |
@@ -124,6 +184,39 @@ when piped). Controls:
 Raw mode (which the dashboard enables) means the terminal no longer turns
 `Ctrl+C` into a `SIGINT`; it arrives as a normal key press, which is why
 it's handled explicitly rather than relying on signal delivery.
+
+## Troubleshooting
+
+- **"ferrite: <some I/O error>" and it exits immediately.** Ferrite
+  needs a real terminal attached to stdout. This happens if you pipe its
+  output (`ferrite | less`), redirect it to a file, or run it in a
+  context with no attached console (some CI runners, certain IDE "run"
+  panels). Run it directly in an interactive terminal instead.
+- **"ferrite: invalid configuration: ...".** Your configuration file
+  (see below) has a malformed value, a typo'd field name, or isn't valid
+  TOML. The error message names the specific field and problem. Fix the
+  file or delete it to fall back to defaults — Ferrite never fixes or
+  overwrites it for you.
+- **Permission errors reading metrics.** Ferrite only reads what an
+  unprivileged process can already see. On most systems this is
+  everything needed for CPU/memory/disk/network totals and your own
+  processes; some systems restrict visibility into *other users'*
+  process details (name/command line), which `sysinfo` — and therefore
+  Ferrite — cannot see around. This is expected OS-level sandboxing, not
+  a bug.
+- **Garbled symbols (boxes, `?`, or missing sparkline bars).** Your
+  terminal or font doesn't support the Unicode characters Ferrite uses
+  for the alert badge (`⚠`), network arrows (`↓↑`), and sparklines. Try a
+  terminal with better Unicode coverage (see Prerequisites above);
+  Ferrite does not currently offer an ASCII-only rendering mode.
+- **The terminal looks broken after Ferrite exits (no prompt, garbled
+  cursor).** This shouldn't happen on a normal `q`/`Esc`/`Ctrl+C` exit or
+  a panic — both restore the terminal (see `src/ui/terminal.rs`). It can
+  still happen if the process is killed outright (`kill -9`, Task
+  Manager "End Task", a host/VM crash), since no cleanup code runs on a
+  non-unwinding kill. Run `reset` (Linux/macOS) or close and reopen the
+  terminal tab (Windows) to recover; this is a limitation of any raw-mode
+  terminal application, not specific to Ferrite.
 
 ## Configuration
 
@@ -167,6 +260,20 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets
 ```
+
+## Benchmarking
+
+```bash
+cargo bench
+```
+
+Runs the [Criterion](https://docs.rs/criterion) microbenchmark suite
+under `benches/core.rs` (process sorting, network rate calculation,
+history insertion/eviction, and metric transformations). See
+[BENCHMARKING.md](BENCHMARKING.md) for what's covered, how to read the
+output, and the actual last-measured results with full hardware/toolchain
+disclosure. These are not run in CI, since results are machine-dependent
+and a fixed threshold would be brittle.
 
 ## Architecture
 
@@ -236,26 +343,50 @@ dashboard directly.
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup
 instructions, coding conventions, and how to submit a pull request.
+[CHANGELOG.md](CHANGELOG.md) tracks notable changes, and
+[RELEASING.md](RELEASING.md) documents how (and whether) a version gets
+tagged and published.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for how to report a vulnerability. There
+is no dedicated security team or private mailing list yet — reports are
+handled by whoever is maintaining the project.
 
 ## Platform support
 
 Ferrite is built on [`sysinfo`](https://docs.rs/sysinfo) for metrics and
 [`ratatui`](https://docs.rs/ratatui) + [`crossterm`](https://docs.rs/crossterm)
-for the terminal UI; all three support Linux, macOS, and Windows. This
-project has been built, linted, and tested on Windows only; Linux and
-macOS are expected to work (continuous integration runs on Ubuntu, and the
-Linux/macOS branches of the configuration file's path resolution have
-their own unit tests) but have not been verified on real hardware.
+for the terminal UI; all three support Linux, macOS, and Windows.
 
-The dashboard has been launched on Windows against a real console session
-and confirmed to render live CPU, memory, disk, network, history, and
-alert-badge data correctly — including the disk and network panels
-introduced in this milestone, and the first-sample "no rate yet" network
-display. Keyboard interaction (navigation, sorting, pause, quit) could
-not be scripted end-to-end in the automated environment this project was
-built in, since its terminal reads console input through the OS console
-API, which doesn't accept piped input — a human should confirm those
-interactively.
+**What's actually been verified, as of this writing:**
+
+- **Local development and manual testing:** Windows only. The dashboard
+  has been launched on Windows against a real console session and
+  confirmed to render live CPU, memory, disk, network, history, and
+  alert-badge data correctly, including the first-sample "no rate yet"
+  network display. Keyboard interaction (navigation, sorting, pause,
+  quit) could not be scripted end-to-end in the automated environment
+  this was built in, since its terminal reads console input through the
+  OS console API, which doesn't accept piped input — a human should
+  confirm those interactively.
+- **Continuous integration:** `.github/workflows/ci.yml` is configured
+  to build, lint, and run the full test suite on `ubuntu-latest`,
+  `windows-latest`, and `macos-latest` for every push and pull request.
+  **This configuration has not yet executed on GitHub** as of the commit
+  that introduced it — it will start running on the next push to this
+  repository. Until a run has actually completed, treat Linux/macOS
+  support as "expected to work, not yet confirmed," not as verified.
+- **Release builds:** `.github/workflows/release.yml` is configured to
+  cross-compile for `x86_64-unknown-linux-gnu`,
+  `x86_64-pc-windows-msvc`, `x86_64-apple-darwin`, and
+  `aarch64-apple-darwin` when a version tag is pushed, re-running the
+  full check suite per target first. No tag has been pushed yet, so no
+  release binary has actually been produced by this workflow.
+
+Compiling for a target is not the same as having run and exercised the
+binary on it — this README does not claim the latter for anything beyond
+the Windows manual testing described above.
 
 Disk and network interface visibility depends entirely on what
 `sysinfo`'s platform backend reports; Ferrite does not filter or
