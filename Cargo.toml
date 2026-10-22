@@ -1,0 +1,11 @@
+[package]
+name = "ferrite"
+version = "0.1.0"
+edition = "2024"
+description = "A fast, lightweight, terminal-native system monitor built in Rust."
+license = "MIT"
+readme = "README.md"
+keywords = ["system-monitor", "terminal", "tui", "cli"]
+categories = ["command-line-utilities"]
+
+[dependencies]

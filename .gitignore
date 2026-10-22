@@ -1,0 +1,14 @@
+/target
+
+# Local environment and secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Editor and OS clutter
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
