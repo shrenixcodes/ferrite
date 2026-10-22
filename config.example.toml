@@ -1,0 +1,39 @@
+# Example Ferrite configuration file.
+#
+# Every field below is optional — Ferrite uses sensible defaults for
+# anything you omit, and this file as a whole is optional too. Ferrite
+# never creates or writes this file itself; copy it to the location
+# documented in README.md (or in `ferrite::config::file::default_config_path`)
+# and edit it there if you want to override any defaults.
+#
+# Unknown fields are rejected with an error rather than silently ignored,
+# so a typo here will be caught the next time Ferrite starts.
+
+# How often the dashboard refreshes, in milliseconds.
+# Range: 100-60000. Default: 1000.
+refresh_interval_ms = 1000
+
+# How many samples of CPU/memory history to keep in memory for the
+# dashboard's sparklines. History is in-memory only and resets when
+# Ferrite exits.
+# Range: 1-3600. Default: 120.
+history_capacity = 120
+
+# CPU usage percentage (0-100) at or above which the CPU alert activates.
+# Default: 90.0.
+cpu_alert_threshold_percent = 90.0
+
+# Memory usage percentage (0-100) at or above which the memory alert
+# activates.
+# Default: 90.0.
+memory_alert_threshold_percent = 90.0
+
+# Disk usage percentage (0-100) at or above which a disk's alert
+# activates. Applied independently to every detected disk/mount.
+# Default: 90.0.
+disk_alert_threshold_percent = 90.0
+
+# Which column the process table is sorted by at startup: "cpu" or
+# "memory". You can still switch it with the 'c'/'m' keys while running.
+# Default: "cpu".
+default_sort_mode = "cpu"

@@ -2,10 +2,12 @@
 //!
 //! This module defines [`AppConfig`], the validated configuration type used
 //! throughout the application, and [`AppConfigBuilder`] for constructing
-//! one from several possibly-untrusted values at once (for example, when
-//! loading settings from a configuration file). This module is
-//! intentionally free of any terminal rendering or operating-system
-//! dependent code so that it can be tested in isolation.
+//! one from several possibly-untrusted values at once — in particular, when
+//! loading settings from a TOML configuration file; see [`file`]. The
+//! types in this top-level module are free of any terminal rendering or
+//! filesystem access, so they can be tested in isolation.
+
+pub mod file;
 
 use std::fmt;
 
