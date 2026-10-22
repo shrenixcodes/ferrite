@@ -56,6 +56,21 @@ request that fails any of them will not be merged.
   rather than real `sleep` calls so tests stay fast and deterministic.
 - Run `cargo test --all-targets` before submitting.
 
+## Benchmarking performance-sensitive changes
+
+If your change touches sorting, rate calculation, or history (see
+`benches/core.rs`), run the relevant benchmark before and after your
+change:
+
+```bash
+cargo bench
+```
+
+See [BENCHMARKING.md](BENCHMARKING.md) for what's covered and how to read
+the output. Benchmark results are not enforced in CI (they're too
+machine-dependent to gate on), but a large regression is worth
+investigating before you open a pull request.
+
 ## Platform-specific contributions
 
 Ferrite targets Linux, Windows, and macOS. If you're fixing or extending

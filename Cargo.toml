@@ -14,3 +14,10 @@ ratatui = { version = "0.30.2", default-features = false, features = ["std", "cr
 serde = { version = "1.0.229", features = ["derive"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["disk", "network", "system"] }
 toml = "1.1.8"
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "core"
+harness = false
