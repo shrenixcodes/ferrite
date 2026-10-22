@@ -11,4 +11,6 @@ categories = ["command-line-utilities"]
 [dependencies]
 crossterm = "0.29.0"
 ratatui = { version = "0.30.2", default-features = false, features = ["std", "crossterm"] }
-sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
+serde = { version = "1.0.229", features = ["derive"] }
+sysinfo = { version = "0.39.6", default-features = false, features = ["disk", "network", "system"] }
+toml = "1.1.8"
