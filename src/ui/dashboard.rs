@@ -14,7 +14,6 @@ use ratatui::widgets::{
 };
 
 use super::app::{App, SortMode};
-use crate::collector::CpuStats;
 
 /// The narrowest terminal width the full dashboard layout supports.
 pub const MIN_TERMINAL_WIDTH: u16 = 60;
@@ -68,21 +67,6 @@ pub fn compute_layout(area: Rect) -> DashboardLayout {
         processes: rows[2],
         footer: rows[3],
     }
-}
-
-/// The fraction of total CPU capacity in use, in `0.0..=1.0`.
-///
-/// [`CpuStats::usage_percent`] is a sum across cores (so it can exceed
-/// `100.0`), while a gauge needs a ratio of total capacity; this also
-/// guards against `core_count == 0` and any floating-point rounding that
-/// could otherwise push the ratio fed to [`Gauge::ratio`] outside the
-/// range it accepts (which would panic).
-pub fn cpu_gauge_ratio(cpu: &CpuStats) -> f64 {
-    if cpu.core_count() == 0 {
-        return 0.0;
-    }
-    let capacity = cpu.core_count() as f64 * 100.0;
-    (f64::from(cpu.usage_percent()) / capacity).clamp(0.0, 1.0)
 }
 
 /// Converts a byte count to whole mebibytes, for compact table display.
@@ -151,7 +135,7 @@ fn render_cpu_panel(frame: &mut Frame, area: Rect, app: &App) {
         "collecting…".to_string()
     };
     let ratio = if app.cpu_metrics_initialized() {
-        cpu_gauge_ratio(cpu)
+        cpu.utilization_fraction()
     } else {
         0.0
     };
@@ -332,24 +316,6 @@ mod tests {
         assert!(layout.processes.height >= 3);
         assert!(layout.cpu.width > 0);
         assert!(layout.memory.width > 0);
-    }
-
-    #[test]
-    fn cpu_gauge_ratio_is_fraction_of_total_capacity() {
-        let cpu = CpuStats::new(200.0, 4);
-        assert!((cpu_gauge_ratio(&cpu) - 0.5).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn cpu_gauge_ratio_clamps_above_full_load() {
-        let cpu = CpuStats::new(999.0, 4);
-        assert_eq!(cpu_gauge_ratio(&cpu), 1.0);
-    }
-
-    #[test]
-    fn cpu_gauge_ratio_handles_zero_cores_without_dividing_by_zero() {
-        let cpu = CpuStats::new(0.0, 0);
-        assert_eq!(cpu_gauge_ratio(&cpu), 0.0);
     }
 
     #[test]

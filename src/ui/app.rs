@@ -1,15 +1,24 @@
 //! Dashboard application state.
 //!
 //! `App` holds everything the dashboard needs to render a frame: the most
-//! recent metrics, the current sort mode, the selected process, and
-//! pause/help flags. It never talks to the operating system or a terminal —
-//! it only transforms state, so every transition here can be unit tested
-//! without a real [`crate::collector::Collector`] or terminal.
+//! recent metrics, bounded CPU/memory history, active alerts, the current
+//! sort mode, the selected process, and pause/help flags. It never talks
+//! to the operating system or a terminal — it only transforms state, so
+//! every transition here can be unit tested without a real
+//! [`crate::collector::Collector`] or terminal.
 
+use std::time::Instant;
+
+use crate::alerts::{ActiveAlert, AlertEngine};
 use crate::collector::{
     CpuStats, DiskInfo, MemoryStats, MetricsSnapshot, NetworkInterfaceStats, ProcessInfo,
     sort_processes_by_cpu_desc, sort_processes_by_memory_desc,
 };
+use crate::history::History;
+
+/// The alert threshold used by [`App::new`]'s simple constructor for every
+/// metric, matching [`crate::config`]'s own defaults.
+const DEFAULT_ALERT_THRESHOLD_PERCENT: f32 = 90.0;
 
 /// How the process table is currently sorted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,11 +29,39 @@ pub enum SortMode {
     Memory,
 }
 
+/// The settings [`App::with_options`] needs, gathered in one place so
+/// constructing a fully-configured `App` does not require a long
+/// positional argument list.
+///
+/// `App` does not depend on [`crate::config::AppConfig`] directly, so the
+/// caller (`main`) is expected to build this from one.
+#[derive(Debug, Clone, Copy)]
+pub struct AppOptions {
+    /// The configured refresh interval, in milliseconds (for display in
+    /// the footer).
+    pub refresh_interval_ms: u32,
+    /// The maximum number of samples retained in the CPU and memory
+    /// history.
+    pub history_capacity: usize,
+    /// The CPU usage percentage at or above which the CPU alert activates.
+    pub cpu_alert_threshold_percent: f32,
+    /// The memory usage percentage at or above which the memory alert
+    /// activates.
+    pub memory_alert_threshold_percent: f32,
+    /// The disk usage percentage at or above which a disk's alert
+    /// activates.
+    pub disk_alert_threshold_percent: f32,
+    /// The process table's sort mode at startup.
+    pub default_sort_mode: SortMode,
+}
+
 /// Dashboard application state.
 ///
-/// Construct with [`App::new`], feed it metrics with [`App::apply_snapshot`]
-/// on every refresh, and mutate it via the navigation/sort/pause methods in
-/// response to user input (see [`crate::ui::events`]).
+/// Construct with [`App::new`] (sensible defaults besides the refresh
+/// interval) or [`App::with_options`] (every setting explicit), feed it
+/// metrics with [`App::apply_snapshot`] on every refresh, and mutate it via
+/// the navigation/sort/pause methods in response to user input (see
+/// [`crate::ui::events`]).
 #[derive(Debug, Clone)]
 pub struct App {
     cpu: CpuStats,
@@ -38,12 +75,44 @@ pub struct App {
     paused: bool,
     show_help: bool,
     refresh_interval_ms: u32,
+    cpu_history: History,
+    memory_history: History,
+    alerts: AlertEngine,
 }
 
 impl App {
     /// Creates a fresh `App` with no metrics yet, using `refresh_interval_ms`
-    /// (from [`crate::config::AppConfig`]) for display in the footer.
+    /// (from [`crate::config::AppConfig`]) for display in the footer, and
+    /// Ferrite's documented defaults for everything [`AppOptions`] would
+    /// otherwise let a caller configure.
     pub fn new(refresh_interval_ms: u32) -> Self {
+        Self::with_options(AppOptions {
+            refresh_interval_ms,
+            history_capacity: crate::history::DEFAULT_HISTORY_CAPACITY,
+            cpu_alert_threshold_percent: DEFAULT_ALERT_THRESHOLD_PERCENT,
+            memory_alert_threshold_percent: DEFAULT_ALERT_THRESHOLD_PERCENT,
+            disk_alert_threshold_percent: DEFAULT_ALERT_THRESHOLD_PERCENT,
+            default_sort_mode: SortMode::Cpu,
+        })
+    }
+
+    /// Creates a fresh `App` with no metrics yet, from a fully-specified
+    /// [`AppOptions`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if any alert threshold in `options` is not a finite
+    /// percentage in `0.0..=100.0`. Build `options` from a validated
+    /// [`crate::config::AppConfig`] (whose own fields are validated in the
+    /// same range) to guarantee this never happens.
+    pub fn with_options(options: AppOptions) -> Self {
+        let alerts = AlertEngine::new(
+            options.cpu_alert_threshold_percent,
+            options.memory_alert_threshold_percent,
+            options.disk_alert_threshold_percent,
+        )
+        .expect("AppOptions thresholds must already be validated, e.g. by AppConfig");
+
         Self {
             cpu: CpuStats::new(0.0, 0),
             memory: MemoryStats::new(0, 0),
@@ -52,16 +121,20 @@ impl App {
             cpu_metrics_initialized: false,
             processes: Vec::new(),
             selected_pid: None,
-            sort_mode: SortMode::Cpu,
+            sort_mode: options.default_sort_mode,
             paused: false,
             show_help: false,
-            refresh_interval_ms,
+            refresh_interval_ms: options.refresh_interval_ms,
+            cpu_history: History::new(options.history_capacity),
+            memory_history: History::new(options.history_capacity),
+            alerts,
         }
     }
 
     /// Replaces the current metrics with a freshly collected snapshot,
-    /// re-sorting the process list according to the active [`SortMode`] and
-    /// preserving the selection where possible.
+    /// re-sorting the process list according to the active [`SortMode`],
+    /// preserving the selection where possible, recording a CPU/memory
+    /// history sample, and re-evaluating alerts.
     ///
     /// If the previously selected process is still present (even at a
     /// different index, due to re-sorting), it stays selected. Otherwise the
@@ -71,6 +144,8 @@ impl App {
     pub fn apply_snapshot(&mut self, snapshot: MetricsSnapshot) {
         let previous_index = self.selected_index();
 
+        self.alerts.evaluate(&snapshot);
+
         self.cpu = *snapshot.cpu();
         self.memory = *snapshot.memory();
         self.disks = snapshot.disks().to_vec();
@@ -79,6 +154,12 @@ impl App {
         self.processes = snapshot.processes().to_vec();
         self.sort_processes();
         self.reconcile_selection(previous_index);
+
+        let now = Instant::now();
+        if self.cpu_metrics_initialized {
+            self.cpu_history.push(now, self.cpu.utilization_fraction());
+        }
+        self.memory_history.push(now, self.memory.used_fraction());
     }
 
     fn sort_processes(&mut self) {
@@ -125,6 +206,28 @@ impl App {
     /// empty if the platform reports none.
     pub fn networks(&self) -> &[NetworkInterfaceStats] {
         &self.networks
+    }
+
+    /// Bounded history of CPU utilization (0.0..=1.0 fraction samples).
+    /// Only receives a new sample on refreshes where
+    /// [`Self::cpu_metrics_initialized`] is true.
+    pub fn cpu_history(&self) -> &History {
+        &self.cpu_history
+    }
+
+    /// Bounded history of memory utilization (0.0..=1.0 fraction samples).
+    pub fn memory_history(&self) -> &History {
+        &self.memory_history
+    }
+
+    /// Every alert currently active (CPU, memory, and per-disk).
+    pub fn active_alerts(&self) -> Vec<ActiveAlert> {
+        self.alerts.active_alerts()
+    }
+
+    /// Whether any alert is currently active.
+    pub fn has_active_alerts(&self) -> bool {
+        self.alerts.has_active_alerts()
     }
 
     /// Whether [`Self::cpu`] (and each process's CPU usage) reflects a real
@@ -426,5 +529,107 @@ mod tests {
         assert!(app.toggle_help());
         assert!(app.show_help());
         assert!(!app.toggle_help());
+    }
+
+    #[test]
+    fn new_app_has_empty_history_and_no_alerts() {
+        let app = App::new(1_000);
+        assert!(app.cpu_history().is_empty());
+        assert!(app.memory_history().is_empty());
+        assert!(!app.has_active_alerts());
+        assert!(app.active_alerts().is_empty());
+    }
+
+    fn snapshot_with_cpu_and_memory(
+        cpu_percent: f32,
+        cpu_initialized: bool,
+        memory_used: u64,
+    ) -> MetricsSnapshot {
+        MetricsSnapshot::new(
+            CpuStats::new(cpu_percent, 1),
+            MemoryStats::new(100, memory_used),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            cpu_initialized,
+        )
+    }
+
+    #[test]
+    fn applying_a_snapshot_records_memory_history_even_before_cpu_is_initialized() {
+        let mut app = App::new(1_000);
+        app.apply_snapshot(snapshot_with_cpu_and_memory(0.0, false, 40));
+
+        assert!(
+            app.cpu_history().is_empty(),
+            "CPU history must wait for a reliable sample"
+        );
+        assert_eq!(app.memory_history().len(), 1);
+        assert_eq!(app.memory_history().latest().unwrap().value, 0.4);
+    }
+
+    #[test]
+    fn applying_a_snapshot_records_cpu_history_once_initialized() {
+        let mut app = App::new(1_000);
+        app.apply_snapshot(snapshot_with_cpu_and_memory(50.0, true, 0));
+
+        assert_eq!(app.cpu_history().len(), 1);
+        assert_eq!(app.cpu_history().latest().unwrap().value, 0.5);
+    }
+
+    #[test]
+    fn history_capacity_comes_from_app_options() {
+        let mut app = App::with_options(AppOptions {
+            refresh_interval_ms: 1_000,
+            history_capacity: 2,
+            cpu_alert_threshold_percent: 90.0,
+            memory_alert_threshold_percent: 90.0,
+            disk_alert_threshold_percent: 90.0,
+            default_sort_mode: SortMode::Cpu,
+        });
+
+        for _ in 0..5 {
+            app.apply_snapshot(snapshot_with_cpu_and_memory(10.0, true, 10));
+        }
+
+        assert_eq!(app.cpu_history().len(), 2);
+        assert_eq!(app.memory_history().len(), 2);
+    }
+
+    #[test]
+    fn applying_snapshots_activates_and_recovers_alerts() {
+        let mut app = App::with_options(AppOptions {
+            refresh_interval_ms: 1_000,
+            history_capacity: 10,
+            cpu_alert_threshold_percent: 50.0,
+            memory_alert_threshold_percent: 90.0,
+            disk_alert_threshold_percent: 90.0,
+            default_sort_mode: SortMode::Cpu,
+        });
+
+        app.apply_snapshot(snapshot_with_cpu_and_memory(80.0, true, 0));
+        assert!(app.has_active_alerts());
+        assert_eq!(app.active_alerts()[0].label, "CPU");
+
+        app.apply_snapshot(snapshot_with_cpu_and_memory(10.0, true, 0));
+        assert!(!app.has_active_alerts());
+    }
+
+    #[test]
+    fn with_options_rejects_invalid_thresholds_via_panic() {
+        let result = std::panic::catch_unwind(|| {
+            App::with_options(AppOptions {
+                refresh_interval_ms: 1_000,
+                history_capacity: 10,
+                cpu_alert_threshold_percent: 200.0,
+                memory_alert_threshold_percent: 90.0,
+                disk_alert_threshold_percent: 90.0,
+                default_sort_mode: SortMode::Cpu,
+            })
+        });
+        assert!(
+            result.is_err(),
+            "an out-of-range threshold must not be silently accepted"
+        );
     }
 }
