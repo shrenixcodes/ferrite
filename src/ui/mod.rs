@@ -4,5 +4,7 @@
 //! event library, so it can be unit tested on its own.
 
 pub mod app;
+pub mod events;
 
 pub use app::{App, SortMode};
+pub use events::{Action, apply_action, map_key_event};
