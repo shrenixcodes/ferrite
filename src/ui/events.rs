@@ -5,7 +5,7 @@
 //! [`App`]), so the dashboard's keyboard behavior can be unit tested
 //! without a real terminal.
 
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::app::{App, SortMode};
 
@@ -35,9 +35,18 @@ pub enum Action {
 /// Only key-press events are mapped; key releases (and repeats, which some
 /// terminals report as a distinct [`KeyEventKind`]) are ignored here so a
 /// single physical keystroke cannot trigger an action more than once.
+///
+/// Raw mode (which the dashboard enables) stops the terminal from turning
+/// Ctrl+C into a `SIGINT` — it arrives here as an ordinary key event
+/// instead, so it is mapped to [`Action::Quit`] explicitly as a safety net
+/// for anyone reflexively hitting it.
 pub fn map_key_event(key: KeyEvent) -> Option<Action> {
     if key.kind != KeyEventKind::Press {
         return None;
+    }
+
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+        return Some(Action::Quit);
     }
 
     match key.code {
@@ -73,7 +82,7 @@ pub fn apply_action(app: &mut App, action: Action) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crossterm::event::{KeyEventState, KeyModifiers};
+    use crossterm::event::KeyEventState;
 
     use super::*;
     use crate::collector::{CpuStats, MemoryStats, MetricsSnapshot, ProcessInfo};
@@ -95,6 +104,20 @@ mod tests {
     fn maps_quit_keys() {
         assert_eq!(map_key_event(press(KeyCode::Char('q'))), Some(Action::Quit));
         assert_eq!(map_key_event(press(KeyCode::Esc)), Some(Action::Quit));
+    }
+
+    #[test]
+    fn maps_ctrl_c_to_quit() {
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        assert_eq!(map_key_event(ctrl_c), Some(Action::Quit));
+    }
+
+    #[test]
+    fn plain_c_without_control_still_sorts_by_cpu() {
+        assert_eq!(
+            map_key_event(press(KeyCode::Char('c'))),
+            Some(Action::SortByCpu)
+        );
     }
 
     #[test]

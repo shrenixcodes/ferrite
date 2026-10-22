@@ -268,13 +268,13 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
 
 fn render_help_overlay(frame: &mut Frame, area: Rect) {
     let popup_area = centered_rect(60, 50, area);
-    let help_text = "q / Esc   Quit\n\
-                      j / ↓     Select next process\n\
-                      k / ↑     Select previous process\n\
-                      c         Sort by CPU usage\n\
-                      m         Sort by memory usage\n\
-                      p         Pause / resume refresh\n\
-                      ?         Toggle this help view";
+    let help_text = "q / Esc / Ctrl+C   Quit\n\
+                      j / ↓              Select next process\n\
+                      k / ↑              Select previous process\n\
+                      c                  Sort by CPU usage\n\
+                      m                  Sort by memory usage\n\
+                      p                  Pause / resume refresh\n\
+                      ?                  Toggle this help view";
 
     frame.render_widget(Clear, popup_area);
     frame.render_widget(
