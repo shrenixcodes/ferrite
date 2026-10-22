@@ -7,14 +7,13 @@ real-time resource metrics, process inspection, and configurable alerts.
 
 ## Development status
 
-**Early stage — foundation only.** Ferrite is not yet a functioning system
-monitor. This milestone establishes the Rust project foundation: a validated
-configuration system, a test suite, continuous integration, and project
-documentation. It does **not** yet collect CPU, memory, disk, network, or
-process data, and it has no terminal dashboard.
+**Early stage — no terminal dashboard yet.** Ferrite can now collect CPU,
+memory, and process metrics through its library API, but nothing displays
+them yet: there is no terminal dashboard, no disk or network statistics, no
+alerting, and no historical storage.
 
-Running the executable prints a short startup message and exits — it does
-not display live system metrics.
+Running the executable still prints a short startup message and exits — it
+does not display live system metrics.
 
 ## Project goals
 
@@ -28,27 +27,41 @@ not display live system metrics.
 
 - A validated application configuration type (`AppConfig`) with a bounded,
   documented refresh interval.
-- A library crate (`ferrite`) exposing the configuration API.
-- A minimal executable that reports its own early-development status.
-- A unit and integration test suite covering configuration behavior.
+- A system metrics collector (`collector::Collector`) that reports:
+  - Global CPU usage and logical core count.
+  - Total and used memory, in bytes (with mebibyte conversion helpers).
+  - A process list (PID, name, CPU usage, memory usage), deterministically
+    sorted by CPU usage with an ascending-PID tie-break.
+- Explicit handling of CPU-sample initialization: a snapshot reports
+  whether its CPU figures reflect a real timed sample, since the first
+  sample after startup cannot yet be meaningful. See the doc comments on
+  `MetricsSnapshot::cpu_metrics_initialized` for details.
+- A library crate (`ferrite`) exposing the configuration and collector
+  APIs.
+- A minimal executable that reports its own early-development status (it
+  does not yet call the collector or display metrics).
+- A unit and integration test suite covering configuration and collector
+  behavior.
 - Continuous integration running formatting, linting, and tests on every
   push and pull request.
 
 ## Planned features (not yet implemented)
 
-- CPU and memory usage collection.
-- Process listing and inspection.
+- A `ratatui`-based terminal dashboard that displays the collected metrics.
 - Disk and network statistics.
-- A `ratatui`-based terminal dashboard.
-- Background data collectors.
+- Background/periodic data collection (the collector currently samples
+  on demand, once per call).
 - Configurable alerts, historical data, and data export.
 
 ## Technology stack
 
 - **Language:** Rust (2024 edition)
-- **Dependencies:** none at this milestone — the standard library only.
-- Planned future milestones are expected to introduce a terminal UI crate
-  (such as `ratatui`) and a system-information crate (such as `sysinfo`).
+- **Dependencies:** [`sysinfo`](https://docs.rs/sysinfo) `0.39`, with only
+  its `system` feature enabled (CPU, memory, and process data). Disk,
+  network, user, and component features are disabled since they are out of
+  scope for this milestone.
+- A planned future milestone is expected to introduce a terminal UI crate
+  (such as `ratatui`) for the dashboard.
 
 ## Prerequisites
 
@@ -76,17 +89,31 @@ The project is currently split into a library crate and a thin executable:
 
 ```
 src/
-├── main.rs    # Executable entry point; prints a startup message.
-├── lib.rs     # Public library API surface.
-└── config.rs  # Validated AppConfig type and its tests.
+├── main.rs            # Executable entry point; prints a startup message.
+├── lib.rs             # Public library API surface.
+├── config.rs          # Validated AppConfig type and its tests.
+└── collector/         # System metrics collection.
+    ├── mod.rs         # Public module surface.
+    ├── cpu.rs         # CpuStats: global usage + core count.
+    ├── memory.rs      # MemoryStats: byte counts and unit conversions.
+    ├── process.rs     # ProcessInfo and deterministic CPU-descending sort.
+    ├── snapshot.rs    # MetricsSnapshot bundling cpu/memory/processes.
+    └── system.rs      # Collector: the only module that calls into
+                        # sysinfo / the operating system.
 tests/
-└── config_tests.rs  # Integration tests for the public config API.
+├── config_tests.rs    # Integration tests for the public config API.
+└── collector_tests.rs # Integration tests for the public collector API.
 ```
 
-`src/config.rs` has no dependency on terminal rendering or operating-system
-APIs, so it can be tested in isolation. Future milestones are expected to add
-modules for metrics collection, process inspection, and the terminal
-dashboard without requiring changes to the configuration layer.
+`src/config.rs` and every type in `src/collector/` other than
+`collector::system` are plain data types or pure functions with no
+dependency on terminal rendering or operating-system APIs, so they can be
+tested in isolation. `collector::system` is the sole module that talks to
+the operating system (via `sysinfo`); it is covered by integration tests
+that assert invariants (e.g. "used memory never exceeds total memory")
+rather than exact values, since those depend on the host machine. Future
+milestones are expected to add process inspection detail, alerting, and the
+terminal dashboard without requiring changes to this layer.
 
 ## Contributing
 
@@ -95,10 +122,11 @@ instructions, coding conventions, and how to submit a pull request.
 
 ## Platform support
 
-Ferrite is developed and tested on a stable Rust toolchain. No platform-
-specific system APIs have been introduced yet, since this milestone performs
-no system data collection. Platform-specific behavior will be documented as
-later milestones add it.
+Ferrite's metrics collector is built on [`sysinfo`](https://docs.rs/sysinfo),
+which supports Linux, macOS, and Windows. This milestone has been built,
+linted, and tested on Windows only; Linux and macOS are expected to work
+(continuous integration runs on Ubuntu) but have not been manually verified
+on real hardware as part of this milestone.
 
 ## License
 
