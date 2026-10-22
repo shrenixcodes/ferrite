@@ -205,6 +205,20 @@ fn render_too_small(frame: &mut Frame, area: Rect) {
     frame.render_widget(message, area);
 }
 
+/// The header's alert badge text (e.g. `"⚠ 1 ALERT"` or `"⚠ 3 ALERTS"`), or
+/// `None` when nothing is active.
+pub fn alert_badge_text(active_alert_count: usize) -> Option<String> {
+    if active_alert_count == 0 {
+        return None;
+    }
+    let noun = if active_alert_count == 1 {
+        "ALERT"
+    } else {
+        "ALERTS"
+    };
+    Some(format!("⚠ {active_alert_count} {noun}"))
+}
+
 fn render_header(frame: &mut Frame, area: Rect, app: &App) {
     let paused_suffix = if app.is_paused() { " [PAUSED]" } else { "" };
     let title = format!(
@@ -216,11 +230,10 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
         title,
         Style::default().add_modifier(Modifier::BOLD),
     )];
-    let active_alerts = app.active_alerts();
-    if !active_alerts.is_empty() {
+    if let Some(badge) = alert_badge_text(app.active_alerts().len()) {
         spans.push(Span::raw("  "));
         spans.push(Span::styled(
-            format!("⚠ {} ALERT(S)", active_alerts.len()),
+            badge,
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ));
     }
@@ -504,6 +517,21 @@ mod tests {
         assert_eq!(bytes_to_mebibytes(2 * 1024 * 1024), 2);
         assert_eq!(bytes_to_mebibytes(1024 * 1024 + 500), 1);
         assert_eq!(bytes_to_mebibytes(0), 0);
+    }
+
+    #[test]
+    fn alert_badge_text_is_none_when_no_alerts_are_active() {
+        assert_eq!(alert_badge_text(0), None);
+    }
+
+    #[test]
+    fn alert_badge_text_uses_singular_noun_for_one_alert() {
+        assert_eq!(alert_badge_text(1), Some("⚠ 1 ALERT".to_string()));
+    }
+
+    #[test]
+    fn alert_badge_text_uses_plural_noun_for_multiple_alerts() {
+        assert_eq!(alert_badge_text(3), Some("⚠ 3 ALERTS".to_string()));
     }
 
     #[test]
