@@ -10,15 +10,24 @@
 # (`gh`, preinstalled on all runners) authenticated with the automatically
 # provided `GITHUB_TOKEN` — no manually configured secret is needed, but
 # the repository's Settings -> Actions -> General -> Workflow permissions
-# must allow "Read and write permissions" (or this workflow's own
-# `permissions: contents: write` must be honored, which requires that
-# setting not be locked to read-only at the organization level).
+# must allow "Read and write permissions" (or the `release` job's own
+# `permissions: contents: write` override below must be honored, which
+# requires that setting not be locked to read-only at the organization
+# level).
+#
+# The workflow-level `permissions` below is read-only; only the `release`
+# job (which actually calls `gh release create`) escalates to `contents:
+# write`. The `build` job — which only checks out, compiles, and uploads
+# a build artifact — never needs write access to repository contents.
 name: Release
 
 on:
   push:
     tags:
       - "v*.*.*"
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always

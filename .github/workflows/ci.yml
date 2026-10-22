@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege default: this workflow only checks out and builds code
+# (including on pull requests, potentially from forks), so the GITHUB_TOKEN
+# it receives needs no more than read access to repository contents.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
