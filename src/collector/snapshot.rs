@@ -88,6 +88,32 @@ impl MetricsSnapshot {
     pub fn cpu_metrics_initialized(&self) -> bool {
         self.cpu_metrics_initialized
     }
+
+    /// Consumes the snapshot, returning its fields by value.
+    ///
+    /// For a caller (such as [`crate::ui::App::apply_snapshot`]) that is
+    /// about to store every field and drop the snapshot anyway, this
+    /// avoids cloning `disks`, `networks`, and `processes` (and the
+    /// `String`s inside them) just to copy out of a borrow first.
+    pub fn into_parts(
+        self,
+    ) -> (
+        CpuStats,
+        MemoryStats,
+        Vec<DiskInfo>,
+        Vec<NetworkInterfaceStats>,
+        Vec<ProcessInfo>,
+        bool,
+    ) {
+        (
+            self.cpu,
+            self.memory,
+            self.disks,
+            self.networks,
+            self.processes,
+            self.cpu_metrics_initialized,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -140,5 +166,39 @@ mod tests {
         assert!(snapshot.networks().is_empty());
         assert!(snapshot.processes().is_empty());
         assert!(!snapshot.cpu_metrics_initialized());
+    }
+
+    #[test]
+    fn into_parts_returns_the_same_values_as_the_borrowing_getters() {
+        let cpu = CpuStats::new(12.5, 4);
+        let memory = MemoryStats::new(1_000, 500);
+        let disks = vec![DiskInfo::new("disk0", "/", 1_000, 500)];
+        let networks = vec![NetworkInterfaceStats::new(
+            "eth0",
+            100,
+            200,
+            Some(10),
+            Some(20),
+        )];
+        let processes = vec![ProcessInfo::new(1, "init", 0.0, 100)];
+
+        let snapshot = MetricsSnapshot::new(
+            cpu,
+            memory,
+            disks.clone(),
+            networks.clone(),
+            processes.clone(),
+            true,
+        );
+
+        let (out_cpu, out_memory, out_disks, out_networks, out_processes, out_initialized) =
+            snapshot.into_parts();
+
+        assert_eq!(out_cpu, cpu);
+        assert_eq!(out_memory, memory);
+        assert_eq!(out_disks, disks);
+        assert_eq!(out_networks, networks);
+        assert_eq!(out_processes, processes);
+        assert!(out_initialized);
     }
 }

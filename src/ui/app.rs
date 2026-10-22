@@ -146,12 +146,14 @@ impl App {
 
         self.alerts.evaluate(&snapshot);
 
-        self.cpu = *snapshot.cpu();
-        self.memory = *snapshot.memory();
-        self.disks = snapshot.disks().to_vec();
-        self.networks = snapshot.networks().to_vec();
-        self.cpu_metrics_initialized = snapshot.cpu_metrics_initialized();
-        self.processes = snapshot.processes().to_vec();
+        let (cpu, memory, disks, networks, processes, cpu_metrics_initialized) =
+            snapshot.into_parts();
+        self.cpu = cpu;
+        self.memory = memory;
+        self.disks = disks;
+        self.networks = networks;
+        self.cpu_metrics_initialized = cpu_metrics_initialized;
+        self.processes = processes;
         self.sort_processes();
         self.reconcile_selection(previous_index);
 
