@@ -57,6 +57,20 @@ pub fn sort_processes_by_cpu_desc(processes: &mut [ProcessInfo]) {
     });
 }
 
+/// Sorts `processes` by memory usage, highest first, breaking ties by
+/// ascending PID so the ordering is deterministic even when two processes
+/// report identical memory usage.
+///
+/// This is a pure function over already-collected data, so it can be tested
+/// without depending on the host's actual process list.
+pub fn sort_processes_by_memory_desc(processes: &mut [ProcessInfo]) {
+    processes.sort_by(|a, b| {
+        b.memory_bytes
+            .cmp(&a.memory_bytes)
+            .then_with(|| a.pid.cmp(&b.pid))
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,5 +144,40 @@ mod tests {
 
         let pids: Vec<u32> = processes.iter().map(|p| p.pid).collect();
         assert_eq!(pids, vec![1, 2]);
+    }
+
+    #[test]
+    fn sorts_by_memory_usage_descending() {
+        let mut processes = vec![
+            process(1, 0.0, 100),
+            process(2, 0.0, 300),
+            process(3, 0.0, 200),
+        ];
+
+        sort_processes_by_memory_desc(&mut processes);
+
+        let pids: Vec<u32> = processes.iter().map(|p| p.pid).collect();
+        assert_eq!(pids, vec![2, 3, 1]);
+    }
+
+    #[test]
+    fn memory_sort_breaks_ties_by_ascending_pid() {
+        let mut processes = vec![
+            process(30, 0.0, 500),
+            process(10, 0.0, 500),
+            process(20, 0.0, 500),
+        ];
+
+        sort_processes_by_memory_desc(&mut processes);
+
+        let pids: Vec<u32> = processes.iter().map(|p| p.pid).collect();
+        assert_eq!(pids, vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn memory_sort_handles_empty_list_without_panicking() {
+        let mut processes: Vec<ProcessInfo> = Vec::new();
+        sort_processes_by_memory_desc(&mut processes);
+        assert!(processes.is_empty());
     }
 }
