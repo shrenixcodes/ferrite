@@ -8,7 +8,7 @@ pub mod dashboard;
 pub mod events;
 pub mod terminal;
 
-pub use app::{App, SortMode};
+pub use app::{App, AppOptions, SortMode};
 pub use dashboard::draw;
 pub use events::{Action, apply_action, map_key_event};
 pub use terminal::TerminalSession;

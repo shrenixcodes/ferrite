@@ -1,7 +1,8 @@
 //! Ferrite executable entry point.
 //!
-//! Launches the interactive terminal dashboard. The refresh cadence comes
-//! from [`AppConfig`]; metric collection, application state, and
+//! Launches the interactive terminal dashboard. Configuration comes from
+//! an optional TOML file (falling back to documented defaults — see
+//! [`ferrite::config::file`]); metric collection, application state, and
 //! rendering are otherwise delegated to the `ferrite` library.
 
 use std::io;
@@ -9,11 +10,17 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event};
 use ferrite::collector::Collector;
-use ferrite::config::AppConfig;
-use ferrite::ui::{self, App, TerminalSession};
+use ferrite::config::{self, AppConfig};
+use ferrite::ui::{self, App, AppOptions, SortMode, TerminalSession};
 
 fn main() {
-    let config = AppConfig::default();
+    let config = match config::file::load_or_default() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("ferrite: invalid configuration: {error}");
+            std::process::exit(1);
+        }
+    };
 
     if let Err(error) = run(config) {
         eprintln!("ferrite: {error}");
@@ -26,7 +33,7 @@ fn main() {
 fn run(config: AppConfig) -> io::Result<()> {
     let mut session = TerminalSession::start()?;
     let mut collector = Collector::new();
-    let mut app = App::new(config.refresh_interval_ms());
+    let mut app = App::with_options(app_options_from(&config));
     let refresh_interval = Duration::from_millis(u64::from(config.refresh_interval_ms()));
     // Bound how long a single poll blocks so a long refresh interval still
     // leaves the UI responsive to key presses and resizes.
@@ -57,6 +64,23 @@ fn run(config: AppConfig) -> io::Result<()> {
                 _ => {}
             }
         }
+    }
+}
+
+/// Converts a validated [`AppConfig`] into the [`AppOptions`] `App`
+/// expects. Kept here, rather than in the library, so `ui` does not need
+/// to depend on `config`'s types.
+fn app_options_from(config: &AppConfig) -> AppOptions {
+    AppOptions {
+        refresh_interval_ms: config.refresh_interval_ms(),
+        history_capacity: config.history_capacity(),
+        cpu_alert_threshold_percent: config.cpu_alert_threshold_percent(),
+        memory_alert_threshold_percent: config.memory_alert_threshold_percent(),
+        disk_alert_threshold_percent: config.disk_alert_threshold_percent(),
+        default_sort_mode: match config.default_sort_mode() {
+            config::DefaultSortMode::Cpu => SortMode::Cpu,
+            config::DefaultSortMode::Memory => SortMode::Memory,
+        },
     }
 }
 
