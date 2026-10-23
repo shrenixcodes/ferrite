@@ -20,7 +20,13 @@ the render loop, and no formal GitHub release has been published yet
 
 No screenshot or terminal recording is included yet — none has actually
 been captured for this repository, and a fabricated one would be
-misleading. Contributions adding a genuine one are welcome.
+misleading. To capture one locally, run `cargo run --release` in a real
+terminal at roughly 120 columns by 36 rows, exercise the dashboard state you
+want to show, and use the terminal or operating system's screenshot command
+to save a privacy-reviewed PNG under `docs/assets/`. Remove hostnames,
+usernames, paths, and process names that should not be published, then add
+the image to this section only after inspecting it. Contributions adding a
+genuine one are welcome.
 
 ## Project goals
 

@@ -47,18 +47,18 @@ other machines; they are a snapshot, not a guarantee.
 
 | Benchmark | Input | Time (median) |
 | --- | --- | --- |
-| `sort_by_cpu_desc` | 100 processes | 4.16 µs |
-| `sort_by_cpu_desc` | 1,000 processes | 43.2 µs |
-| `sort_by_cpu_desc` | 10,000 processes | 631 µs |
-| `sort_by_memory_desc` | 100 processes | 3.97 µs |
-| `sort_by_memory_desc` | 1,000 processes | 37.4 µs |
-| `sort_by_memory_desc` | 10,000 processes | 371 µs |
-| `bytes_per_second` (typical) | — | 339 ps |
-| `bytes_per_second` (counter reset) | — | 329 ps |
-| `History::push` (below capacity) | 1,000 pushes into capacity 10,000 | 9.58 µs total (~9.6 ns/push) |
-| `History::push` (at capacity, evicting) | 1,000 pushes into capacity 120 | 6.84 µs total (~6.8 ns/push) |
-| `CpuStats::utilization_fraction` | — | 2.59 ns |
-| `MemoryStats::used_fraction` | — | 330 ps |
+| `sort_by_cpu_desc` | 100 processes | 2.66 µs |
+| `sort_by_cpu_desc` | 1,000 processes | 27.2 µs |
+| `sort_by_cpu_desc` | 10,000 processes | 356 µs |
+| `sort_by_memory_desc` | 100 processes | 2.59 µs |
+| `sort_by_memory_desc` | 1,000 processes | 25.2 µs |
+| `sort_by_memory_desc` | 10,000 processes | 259 µs |
+| `bytes_per_second` (typical) | — | 238 ps |
+| `bytes_per_second` (counter reset) | — | 236 ps |
+| `History::push` (below capacity) | 1,000 pushes into capacity 10,000 | 6.50 µs total (~6.5 ns/push) |
+| `History::push` (at capacity, evicting) | 1,000 pushes into capacity 120 | 4.03 µs total (~4.0 ns/push) |
+| `CpuStats::utilization_fraction` | — | 1.16 ns |
+| `MemoryStats::used_fraction` | — | 244 ps |
 
 **Reading these honestly:**
 - The sub-nanosecond numbers (`bytes_per_second`, `used_fraction`) are at
