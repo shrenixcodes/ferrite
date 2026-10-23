@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a focused improvement that fits Ferrite's terminal-native scope.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. Ferrite is a terminal-native system monitor; GUI, web dashboard, and remote telemetry requests are currently out of scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the use case and who benefits from it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Explain the smallest useful change and any trade-offs.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workaround
+      description: Include approaches you considered or use today.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard and keyboard controls
+        - Metrics collection
+        - Configuration and alerts
+        - Documentation or developer experience
+        - Performance
+        - Other
+    validations:
+      required: true

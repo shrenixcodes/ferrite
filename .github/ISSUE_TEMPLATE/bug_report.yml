@@ -1,0 +1,58 @@
+name: Bug report
+description: Report behavior that does not match Ferrite's documented functionality.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. Do not include secrets or exploit details; follow [SECURITY.md](../../SECURITY.md) for security concerns.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and, if possible, include the relevant error text.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the smallest deterministic sequence that demonstrates the problem.
+      placeholder: |
+        1. Run ...
+        2. Press ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Ferrite version or commit
+      description: Use the Cargo.toml version or the commit hash for a checkout build.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and terminal
+      description: Include the OS version and terminal emulator.
+    validations:
+      required: true
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration
+      description: Say whether you used defaults. If you used config.toml, paste relevant values and redact personal paths.
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add logs, screenshots, or other context that helps reproduce the issue.

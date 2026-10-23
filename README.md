@@ -7,7 +7,7 @@ real-time resource metrics, process inspection, and configurable alerts.
 
 ## Development status
 
-**Pre-1.0, active development (current version: see `Cargo.toml`) — core
+**Pre-1.0, active development (version `0.2.0`) — core
 metrics, history, and alerting are in place; export and remote telemetry
 are not.** Running the executable opens a live terminal dashboard with
 CPU, memory, disk, and network panels, bounded in-memory history
@@ -15,7 +15,8 @@ sparklines, a sortable/navigable process table, and configurable
 threshold alerts. Configuration can come from an optional TOML file.
 There is still no data export, no background collection decoupled from
 the render loop, and no formal GitHub release has been published yet
-(see [CHANGELOG.md](CHANGELOG.md) and [RELEASING.md](RELEASING.md)).
+(see [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and
+[RELEASING.md](RELEASING.md)).
 
 No screenshot or terminal recording is included yet — none has actually
 been captured for this repository, and a fabricated one would be
@@ -345,7 +346,8 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup
 instructions, coding conventions, and how to submit a pull request.
 [CHANGELOG.md](CHANGELOG.md) tracks notable changes, and
 [RELEASING.md](RELEASING.md) documents how (and whether) a version gets
-tagged and published.
+tagged and published. The small, non-binding roadmap is in
+[ROADMAP.md](ROADMAP.md).
 
 ## Security
 

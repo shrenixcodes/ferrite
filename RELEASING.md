@@ -47,8 +47,12 @@ Before tagging:
       `v0.2.0`).
 - [ ] `Cargo.lock` is up to date (`cargo check` after any `Cargo.toml`
       edit) and committed.
+- [ ] Review the dependency tree and license metadata for the release;
+      confirm no newly introduced dependency or license requires follow-up.
 - [ ] README's feature list and platform-support claims still match
       what's actually implemented and actually tested.
+- [ ] `CHANGELOG.md` has release notes covering user-visible changes,
+      known limitations, and upgrade notes where applicable.
 - [ ] No secrets, local paths, or generated artifacts are staged.
 
 Tagging and pushing:
@@ -60,7 +64,10 @@ git push origin v0.2.0
 
 Pushing the tag (not a commit to `main`) is what triggers the release
 workflow. After it completes, verify the GitHub release was created with
-all four binaries attached before announcing it anywhere.
+all four binaries attached before announcing it anywhere. Verify each
+downloaded artifact opens or runs on its target platform and publish a
+checksum file (for example, a SHA-256 manifest) alongside the artifacts;
+the current workflow does not generate checksums automatically.
 
 ## Versioning policy
 
